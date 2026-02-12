@@ -1,17 +1,18 @@
 """
 Entry point for embedding-playground.
-Demonstrates loading Word2Vec / GloVe and performing nearest neighbor search.
+Demonstrates loading Word2Vec / GloVe, nearest neighbors and word analogies.
 """
 
 from src.download import download_word2vec_model, download_glove_model
 from src.models import (
-    load_word2vec_model, load_glove_model, nearest_neighbors, model_info
+    load_word2vec_model, load_glove_model,
+    nearest_neighbors, model_info, find_analogies
 )
 
 
 def main():
     print("=" * 60)
-    print("Embedding Playground — Model Loading & Nearest Neighbors")
+    print("Embedding Playground — Models & Analogies")
     print("=" * 60)
 
     # Word2Vec
@@ -27,9 +28,18 @@ def main():
         w2v_model = load_word2vec_model(w2v_path, use_cached=True)
         if w2v_model:
             model_info(w2v_model, "Word2Vec (GoogleNews)")
-            # Test nearest neighbors
+            # Nearest neighbors
             for word in ["king", "france", "computer"]:
                 nearest_neighbors(word, w2v_model, topn=5)
+            # Analogies
+            analogies = [
+                ("king", "man", "woman"),
+                ("france", "paris", "london"),
+                ("moscow", "russia", "tokyo"),
+            ]
+            print("\nWord2Vec Analogies")
+            for w1, w2, w3 in analogies:
+                find_analogies(w1, w2, w3, w2v_model, topn=3)
 
     # GloVe
     print("\n[2] GloVe (6B.100d)")
@@ -45,6 +55,14 @@ def main():
             model_info(glove_model, "GloVe (6B.100d)")
             for word in ["king", "france", "computer"]:
                 nearest_neighbors(word, glove_model, topn=5)
+            analogies = [
+                ("king", "man", "woman"),
+                ("france", "paris", "london"),
+                ("moscow", "russia", "tokyo"),
+            ]
+            print("\nGloVe Analogies")
+            for w1, w2, w3 in analogies:
+                find_analogies(w1, w2, w3, glove_model, topn=3)
 
     print("\n" + "=" * 60)
     if w2v_model is None and glove_model is None:

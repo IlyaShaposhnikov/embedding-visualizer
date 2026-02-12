@@ -1,6 +1,10 @@
 """
-Load pre-trained embedding models (Word2Vec, GloVe) into Gensim KeyedVectors.
-Provides fast loading via cached binary format and nearest neighbors search.
+Load and interact with pre-trained embedding models (Word2Vec, GloVe).
+Features:
+  - Fast loading via cached binary format (.model)
+  - Nearest neighbors search
+  - Word analogy solving (king - man + woman = queen)
+  - Model metadata inspection
 """
 
 import os
@@ -115,7 +119,7 @@ def load_glove_model(
     if txt_path is None:
         txt_path = os.path.join(data_dir, f"glove.{version}.txt")
 
-    if not os.path.exists(txt_path):
+    if not os.path.exists(txt_path) or os.path.getsize(txt_path) == 0:
         print(f"GloVe file not found: {txt_path}")
         print(
             "Please run download_glove_model() first "
@@ -188,15 +192,56 @@ def nearest_neighbors(
         # Pretty print
         print(f"\nNEAREST NEIGHBORS: '{word}'")
         print("─" * 60)
+        print(f"{'#':>2s}  {'Word':<20s}  {'Similarity':>10s}")
+        print("─" * 60)
         for i, (neighbor, sim) in enumerate(results, 1):
-            bar = "=" * int(sim * 20)  # visual similarity bar (max 20 chars)
-            print(f"{i:2d}. {neighbor:20s} | {sim:.4f} | {bar}")
+            print(f"{i:2d}. {neighbor:<20s}  {sim:>10.4f}")
         print("─" * 60)
 
         return results
 
     except Exception as e:
         print(f"Error during nearest neighbor search: {e}")
+        return []
+
+
+def find_analogies(
+    w1: str,
+    w2: str,
+    w3: str,
+    model: KeyedVectors,
+    topn: int = 3,
+) -> List[Tuple[str, float]]:
+    """Solve word analogy: w1 - w2 = ? - w3   (vector: w1 - w2 + w3)"""
+    if model is None:
+        print("Model is None. Load a model first.")
+        return []
+
+    # Check that all input words exist in vocabulary
+    missing = [word for word in (w1, w2, w3) if word not in model.key_to_index]
+    if missing:
+        print(f"Words not in vocabulary: {', '.join(missing)}")
+        return []
+
+    try:
+        # Vector arithmetic: w1 - w2 + w3
+        results = model.most_similar(
+            positive=[w1, w3], negative=[w2], topn=topn
+        )
+
+        # Pretty output
+        print(f"\nANALOGY: {w1} - {w2} = ? - {w3}")
+        print("─" * 60)
+        print(f"{'#':>2s}  {'Solution':<20s}  {'Similarity':>10s}")
+        print("─" * 60)
+        for i, (candidate, sim) in enumerate(results, 1):
+            print(f"{i:2d}. {candidate:<20s}  {sim:>10.4f}")
+        print("─" * 60)
+
+        return results
+
+    except Exception as e:
+        print(f"Error during analogy search: {e}")
         return []
 
 
