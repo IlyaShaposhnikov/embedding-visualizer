@@ -1,26 +1,36 @@
 """
 Entry point for embedding-playground.
-Currently tests the Word2Vec download mechanism.
+Tests both Word2Vec and GloVe download mechanisms.
 """
 
-from src.download import download_word2vec_model
+from src.download import download_word2vec_model, download_glove_model
 
 
 def main():
     try:
+        # Test Word2Vec
         print("=" * 60)
         print("Embedding Playground — Word2Vec Download Test")
         print("=" * 60)
 
-        model_path = download_word2vec_model()
-        if model_path:
-            print(f"\nModel ready at: {model_path}")
-            print(
-                "You can now load it with "
-                "gensim.models.KeyedVectors.load_word2vec_format()"
-            )
+        w2v_path = download_word2vec_model()
+        if w2v_path:
+            print(f"\nWord2Vec model ready at: {w2v_path}")
         else:
-            print("\nModel download failed.")
+            print("\nWord2Vec model download skipped or failed.")
+
+        # Test GloVe
+        print("\n" + "=" * 60)
+        print("Embedding Playground — GloVe Download Test")
+        print("=" * 60)
+
+        # Test the recommended 100d version
+        glove_path = download_glove_model(version="6B.100d")
+        if glove_path:
+            print(f"\nGloVe model ready at: {glove_path}")
+        else:
+            print("\nGloVe model download failed.")
+
     except KeyboardInterrupt:
         print("\n\nDownload interrupted by user (Ctrl+C).")
     except Exception as e:
