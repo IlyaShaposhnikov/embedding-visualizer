@@ -1,15 +1,17 @@
 """
 Dimensionality reduction and 2D projection of word embeddings.
-Supports PCA and t-SNE.
+Visualizes semantic clusters formed by seed words and their nearest neighbors.
 """
 
 from typing import Optional
 
-import numpy as np
+from gensim.models import KeyedVectors
 import matplotlib.pyplot as plt
+import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
-from gensim.models import KeyedVectors
+
+from src.queries import get_nearest_neighbors
 
 # Default visualization settings
 DEFAULT_N_WORDS = 50
@@ -85,35 +87,55 @@ def project_words(
 def plot_embeddings(
     coords: np.ndarray,
     words: list,
+    labels: Optional[list] = None,
+    seed_words: Optional[list] = None,
     title: str = "Word Embeddings Visualization",
     figsize: tuple = (12, 8),
     save_path: Optional[str] = None,
-    show_labels: bool = True,
 ) -> None:
-    """Plot 2D projections with optional word labels."""
+    """Plot 2D projections with optional colored clusters and word labels."""
     if coords is None or len(coords) == 0:
         print("No coordinates to plot.")
         return
 
     plt.figure(figsize=figsize)
-    plt.scatter(coords[:, 0], coords[:, 1], alpha=0.6, edgecolors="k")
 
-    # Add labels (if requested)
-    if show_labels:
-        for i, word in enumerate(words):
-            plt.annotate(
-                word,
-                (coords[i, 0], coords[i, 1]),
-                fontsize=9,
-                alpha=0.8,
-                xytext=(5, 5),
-                textcoords="offset points",
+    if labels is not None and seed_words is not None:
+        unique_labels = sorted(set(labels))
+        colors = plt.cm.tab10(np.linspace(0, 1, len(unique_labels)))
+
+        for cluster_id in unique_labels:
+            mask = [i for i, label in enumerate(labels) if label == cluster_id]
+            plt.scatter(
+                coords[mask, 0],
+                coords[mask, 1],
+                color=colors[cluster_id],
+                label=f"Cluster: {seed_words[cluster_id]}",
+                alpha=0.7,
+                edgecolors="k",
+                s=100
             )
+    else:
+        plt.scatter(coords[:, 0], coords[:, 1], alpha=0.6, edgecolors="k")
 
-    plt.title(title)
+    for i, word in enumerate(words):
+        plt.annotate(
+            word,
+            (coords[i, 0], coords[i, 1]),
+            fontsize=9,
+            alpha=0.9,
+            xytext=(5, 5),
+            textcoords="offset points",
+        )
+
+    plt.title(title, fontsize=14, fontweight="bold")
     plt.xlabel("Component 1")
     plt.ylabel("Component 2")
     plt.grid(True, linestyle="--", alpha=0.5)
+
+    if labels is not None:
+        plt.legend()
+
     plt.tight_layout()
 
     if save_path:
@@ -122,46 +144,84 @@ def plot_embeddings(
     plt.show()
 
 
-def visualize_random_words(
+def visualize_word_clusters(
+    seed_words: list,
     model: KeyedVectors,
-    n_words: int = DEFAULT_N_WORDS,
-    method: str = DEFAULT_METHOD,
+    topn: int = 3,
+    method: str = "pca",
     model_name: str = "Model",
     save: Optional[str] = None,
 ) -> None:
-    """Select random words from model vocabulary and visualize them."""
+    """
+    Visualize semantic clusters formed by seed words
+    and their nearest neighbors.
+    """
     if model is None:
         print("Model is None. Load a model first.")
         return
 
-    vocab_size = len(model)
-    if vocab_size == 0:
-        print("Vocabulary is empty.")
+    # Validate seed words
+    missing = [w for w in seed_words if w not in model.key_to_index]
+    if missing:
+        print(f"Seed words not in vocabulary: {', '.join(missing)}")
         return
 
-    n_words = min(n_words, vocab_size)
-    # Random sample
-    words = RANDOM_GENERATOR.choice(
-        list(model.key_to_index.keys()),
-        size=n_words,
-        replace=False
-    ).tolist()
+    if len(seed_words) > 6:
+        print(
+            f"Warning: {len(seed_words)} seed words "
+            "may produce a crowded plot. "
+            "Consider using 3-4 words for better readability."
+        )
 
-    print(f"Projecting {n_words} random words using {method.upper()}...")
+    # Gather words and their cluster labels using nearest_neighbors logic
+    word_to_cluster = {}
+    cluster_words = []  # list of (word, cluster_id)
+
+    for idx, seed in enumerate(seed_words):
+        # Add seed word itself
+        if seed not in word_to_cluster:
+            word_to_cluster[seed] = idx
+            cluster_words.append((seed, idx))
+
+        # Fetch neighbors using ВАШУ функцию (единая точка контроля)
+        neighbors = get_nearest_neighbors(seed, model, topn=topn)
+        if neighbors:
+            for neighbor, _ in neighbors:
+                if neighbor not in word_to_cluster:
+                    word_to_cluster[neighbor] = idx
+                    cluster_words.append((neighbor, idx))
+        else:
+            print(f"Warning: no neighbors found for '{seed}'")
+
+    total_words = len(cluster_words)
+    print(
+        f"Collected {total_words} words: {len(seed_words)} seeds "
+        f"+ up to {topn} neighbors each."
+    )
+
+    if total_words < 2:
+        print("Insufficient words for projection.")
+        return
+
+    # Extract words and labels
+    words = [w for w, _ in cluster_words]
+    labels = [c for _, c in cluster_words]
+
+    # Project
     coords = project_words(model, words, method=method)
+    if coords is None:
+        return
 
-    if coords is not None:
-        show_labels = n_words <= 30
-        if not show_labels:
-            print(
-                f"Note: Labels hidden for clarity (n_words={n_words} > 30). "
-                "Use fewer words or call plot_embeddings() directly "
-                "with show_labels=True."
-            )
-
-        title = (
-            f"{model_name} - {method.upper()} projection of {n_words} words"
-        )
-        plot_embeddings(
-            coords, words, title=title, save_path=save, show_labels=show_labels
-        )
+    # Plot with colors
+    title = (
+        f"{model_name} - {method.upper()} clusters "
+        f"(seeds: {', '.join(seed_words)})"
+    )
+    plot_embeddings(
+        coords,
+        words,
+        labels,
+        seed_words,
+        title=title,
+        save_path=save,
+    )
