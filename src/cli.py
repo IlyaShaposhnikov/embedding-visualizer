@@ -2,13 +2,18 @@
 Interactive terminal interface for embedding-playground.
 Allows users to query nearest neighbors and word analogies in real time.
 """
-
+from pathlib import Path
+import re
+from datetime import datetime
 from typing import Optional
 from gensim.models import KeyedVectors
+
 from src.models import model_info
 from src.queries import nearest_neighbors, find_analogies
+from src.visualize import visualize_random_words
 
 MAX_TOPN = 50
+VIZ_SAVE_DIR = "data/visualizations"
 DEMO_NEIGHBORS = ["king", "france", "computer"]
 DEMO_ANALOGIES = [
     ("king", "man", "woman"),
@@ -51,7 +56,7 @@ def interactive_shell(
 
     while True:
         try:
-            cmd = input("Type here >>> ").strip().lower()
+            cmd = input("\n>>> ").strip().lower()
 
             if cmd in ("exit", "quit"):
                 print("Goodbye!")
@@ -158,6 +163,80 @@ def interactive_shell(
                         model_name=model_name
                     )
 
+            elif cmd.startswith("viz "):
+                # Usage: viz [n_words] [pca|tsne]
+                parts = cmd.split()
+                n_words = 50
+                method = "pca"
+                validation_failed = False
+
+                if len(parts) > 1:
+                    try:
+                        n_words = int(parts[1])
+                        if n_words < 1:
+                            print(
+                                "Error: n_words must be at least 1 "
+                                f"(got {n_words})."
+                            )
+                            validation_failed = True
+                        elif n_words > 200:
+                            print(
+                                "Warning: n_words capped at 200 "
+                                f"(requested {n_words})."
+                            )
+                            n_words = 200
+                    except ValueError:
+                        print(
+                            f"Error: invalid number '{parts[1]}'. "
+                            "Expected integer (e.g., 30)."
+                        )
+                        validation_failed = True
+
+                if len(parts) > 2 and not validation_failed:
+                    method = parts[2].lower()
+                    if method not in ("pca", "tsne"):
+                        print(
+                            f"Error: unknown method '{method}'. "
+                            "Use 'pca' or 'tsne'."
+                        )
+                        validation_failed = True
+
+                if validation_failed:
+                    print("Usage: viz [n_words] [pca|tsne]")
+                    print("Examples:")
+                    print("  viz        → 50 words, PCA")
+                    print("  viz 30     → 30 words, PCA")
+                    print("  viz 20 tsne → 20 words, t-SNE")
+                    continue
+
+                Path(VIZ_SAVE_DIR).mkdir(parents=True, exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                safe_model_name = (
+                    re.sub(r"[^\w\-]", "_", model_name).strip("_")
+                )
+                safe_model_name = re.sub(r"_+", "_", safe_model_name)
+                filename = (
+                    f"viz_{safe_model_name}_{method}_"
+                    f"{n_words}words_{timestamp}.png"
+                )
+                save_path = Path(VIZ_SAVE_DIR) / filename
+
+                if current_model is None:
+                    print("No model loaded. Use 'use <model>' first.")
+                else:
+                    print(
+                        f"Generating visualization ({n_words} "
+                        f"words, {method.upper()})..."
+                    )
+                    visualize_random_words(
+                        current_model,
+                        n_words=n_words,
+                        method=method,
+                        model_name=model_name,
+                        save=save_path,
+                    )
+                    print(f"Saved to: {save_path.as_posix()}")
+
             elif cmd == "":
                 continue
 
@@ -181,6 +260,8 @@ COMMANDS:
   use <model>                Switch model: 'word2vec' or 'glove'
   nn <word> [topn]           Nearest neighbors (default topn=5)
   ana <w1> <w2> <w3> [topn]  Word analogy (default topn=3) | w1 - w2 = ? - w3
+  viz [n] [pca|tsne]         Visualize random words (default: 50 words, PCA) |
+                             → Automatically saved to data/visualizations/
   demo                       Run demonstration queries
   model                      Show current model info
   help                       Show this help
