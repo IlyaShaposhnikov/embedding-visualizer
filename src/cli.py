@@ -36,7 +36,7 @@ def interactive_shell(
     current_model = None
     model_name = "None"
 
-    # Auto-select first available model
+    # Auto-select first available model for immediate usability
     if w2v_model is not None:
         current_model = w2v_model
         model_name = "Word2Vec (GoogleNews)"
@@ -47,9 +47,9 @@ def interactive_shell(
     if current_model is None:
         print("\nNO MODELS LOADED!")
         print("To use this tool, first download models:")
-        print("- Word2Vec:  run download_word2vec_model()")
-        print("- GloVe:     run download_glove_model()")
-        print("\n   Type 'exit' to quit.\n")
+        print("- Word2Vec: run download_word2vec_model()")
+        print("- GloVe: run download_glove_model()")
+        print("\nType 'exit' to quit.\n")
     else:
         print(f"\nActive model: {model_name}")
         print(
@@ -75,7 +75,7 @@ def interactive_shell(
                 _show_model_status(current_model, model_name)
 
             elif cmd.startswith("use "):
-                # Switch model: use word2vec / use glove
+                # Switch model: use word2vec | use glove
                 _, target = cmd.split(maxsplit=1)
 
                 available_models = []
@@ -102,7 +102,7 @@ def interactive_shell(
                         print("No models loaded. Run download scripts first.")
 
             elif cmd.startswith("nn "):
-                # Nearest neighbors: nn king 5
+                # Nearest neighbors: nn king [5]
                 parts = cmd.split()
                 if len(parts) < 2:
                     print("Usage: nn <word> [topn]")
@@ -133,18 +133,29 @@ def interactive_shell(
                     )
 
             elif cmd.startswith("ana "):
-                # Analogy: ana king man woman 3
+                # Analogy: ana king man woman [topn] [-v] [pca|tsne]
+                # Parsing strategy: extract -v flag first,
+                # then check for method at the end
                 parts = cmd.split()
                 if len(parts) < 4:
-                    print("Usage: ana <w1> <w2> <w3> [topn] [-v]")
+                    print("Usage: ana <w1> <w2> <w3> [topn] [-v] [pca|tsne]")
                     continue
 
+                # Extract visualization flag before parsing other arguments
                 visualize = "-v" in parts
                 if visualize:
                     parts.remove("-v")
 
+                # Default method is PCA;
+                # check last argument for method override
+                method = "pca"
+                if parts[-1].lower() in ("pca", "tsne"):
+                    method = parts[-1].lower()
+                    parts = parts[:-1]
+
                 w1, w2, w3 = parts[1:4]
 
+                # Parse optional topn, default to 3
                 try:
                     topn = int(parts[4]) if len(parts) > 4 else 3
                     if topn < 1:
@@ -157,6 +168,7 @@ def interactive_shell(
                         )
                         topn = MAX_TOPN
                 except (ValueError, IndexError):
+                    # Safely handle missing or invalid topn value
                     invalid_val = parts[4] if len(parts) > 4 else "missing"
                     print(
                         f"Invalid number: '{invalid_val}'. "
@@ -167,14 +179,36 @@ def interactive_shell(
                 if current_model is None:
                     print("No model loaded. Use 'use <model>' first.")
                 else:
+                    # Generate save path if visualization is requested
+                    save_path = None
+                    if visualize:
+                        Path(VIZ_SAVE_DIR).mkdir(parents=True, exist_ok=True)
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        # Sanitize model name for filename
+                        safe_model_name = re.sub(
+                            r"[^\w\-]", "_", model_name
+                        ).strip("_")
+                        safe_model_name = re.sub(r"_+", "_", safe_model_name)
+                        # Create safe filename from analogy words
+                        analogy_str = f"{w1}_{w2}_{w3}"[:40]
+                        filename = (
+                            f"analogy_{safe_model_name}_{method}_"
+                            f"{analogy_str}_top{topn}_{timestamp}.png"
+                        )
+                        save_path = Path(VIZ_SAVE_DIR) / filename
+
+                    # Execute analogy query with visualization parameters
                     find_analogies(
                         w1, w2, w3, current_model, topn=topn,
                         model_name=model_name,
-                        visualize=visualize
+                        visualize=visualize,
+                        method=method,
+                        save=save_path
                     )
 
             elif cmd.startswith("vc "):
                 # Usage: vc <word1> [word2 ...] [topn] [pca|tsne]
+                # Parse from the end
                 parts = cmd.split()
                 if len(parts) < 2:
                     print("Usage: vc <word1> [word2 ...] [topn] [pca|tsne]")
@@ -186,10 +220,12 @@ def interactive_shell(
 
                 args = parts[1:]
 
+                # Check last argument for method
                 if args[-1].lower() in ("pca", "tsne"):
                     method = args[-1].lower()
                     args = args[:-1]
 
+                # Check new last argument for topn integer
                 if args and args[-1].isdigit():
                     topn = int(args[-1])
                     if topn < 1:
@@ -202,6 +238,7 @@ def interactive_shell(
                         topn = 20
                     args = args[:-1]
 
+                # Remaining arguments are seed words
                 words = args
 
                 if not words:
@@ -211,14 +248,16 @@ def interactive_shell(
                 if current_model is None:
                     print("No model loaded. Use 'use <model>' first.")
                 else:
+                    # Ensure visualization directory exists
                     Path(VIZ_SAVE_DIR).mkdir(parents=True, exist_ok=True)
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    # Sanitize model name for filesystem
                     safe_model_name = re.sub(
                         r"[^\w\-]", "_", model_name
                     ).strip("_")
                     safe_model_name = re.sub(r"_+", "_", safe_model_name)
-                    # Create safe filename from seed words
-                    seed_str = "_".join(words)[:40]  # limit length
+                    # Create safe filename from seed words (limit length)
+                    seed_str = "_".join(words)[:40]
                     filename = (
                         f"clust_{safe_model_name}_{method}_"
                         f"{seed_str}_top{topn}_{timestamp}.png"
@@ -268,21 +307,25 @@ def _show_help() -> None:
     """Display available commands."""
     help_text = """
 COMMANDS:
-  use <model>                     Switch model: 'word2vec' or 'glove'
-  nn <word> [topn]                Nearest neighbors (default topn=5)
-  ana <w1> <w2> <w3> [topn] [-v]  Word analogy (default topn=3) | w1 - w2 = ? - w3
-                                  • -v   : visualize results in 2D space (pca method)
-  vc <w1> [w2 ...] [n] [m]        Visualize semantic clusters:
-                                  • <w1> : seed words (min 1)
-                                  • [n]  : neighbors per seed (default 3, max 20)
-                                  • [m]  : method 'pca' or 'tsne' (default pca)
-                                  → Automatically saved to data/visualizations/
-  demo                            Run full demonstration
-                                  → (neighbors, analogies, clusters)
-  model                           Show current model info
-  eval                            Evaluate current model on Google Analogy Test Set
-  help                            Show this help
-  exit / quit                     Exit program
+  use <model>           Switch model: 'word2vec' or 'glove'
+  nn <word> [topn]      Nearest neighbors (default topn=5)
+  ana <w1> <w2> <w3> [topn] [-v] [m]
+                        Word analogy (default topn=3) | w1 - w2 = ? - w3
+                        • -v   : visualize results in 2D space (pca method)
+                        • [m]  : method 'pca' or 'tsne' (default pca)
+                        • Automatically saved to data/visualizations/
+  vc <w1> [w2 ...] [n] [m]
+                        Visualize semantic clusters:
+                        • <w1> : seed words (min 1)
+                        • [n]  : neighbors per seed (default 3, max 20)
+                        • [m]  : method 'pca' or 'tsne' (default pca)
+                        • Automatically saved to data/visualizations/
+  demo                  Run full demonstration
+                        • nearest neighbors, solve analogies, semantic clusters
+  model                 Show current model info
+  eval                  Evaluate current model on Google Analogy Test Set
+  help                  Show this help
+  exit / quit           Exit program
 """
     print(help_text)
 

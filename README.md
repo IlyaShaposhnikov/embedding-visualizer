@@ -12,8 +12,8 @@
   - GloVe 6B (400K words, 50/100/200/300d variants)
 - **Smart Caching** – models saved in Gensim binary format for instant subsequent loads
 - **Nearest Neighbors** – find semantically similar words with visual similarity bars
-- **Analogies** – solve `king - man + woman = ?` with 2D vector visualization (`-v` flag)
-- **Semantic Clusters** – plot seed words + neighbors using PCA/t-SNE
+- **Analogies** – solve `king - man + woman = ?` with 2D vector visualization (`-v` flag) using PCA/t-SNE
+- **Semantic Clusters** – 2D vector visualization of seed words + neighbors using PCA/t-SNE
 - **Evaluation** – test on Google Analogy Test Set (19,544 questions) with semantic/syntactic breakdown
 - **Interactive CLI** – intuitive shell with contextual help and demo mode
 
@@ -26,7 +26,8 @@
 git clone https://github.com/IlyaShaposhnikov/embedding-playground.git
 cd embedding-playground
 python -m venv .venv
-source venv/Scripts/activate
+source venv/Scripts/activate  #Windows
+source .venv/bin/activate  # Linux/macOS
 pip install -r requirements.txt
 ```
 
@@ -41,11 +42,11 @@ On first run, models download automatically (~1.5 GB for Word2Vec, ~800 MB for G
 ### 3. Try commands
 
 ```bash
->>> nn king 5                     # 5 nearest neighbors of 'king'
->>> ana paris france berlin -v    # paris - france = ? - berlin + visualization
->>> vc king queen computer 3 pca  # clusters for 3 seeds with 3 neighbors each (PCA)
->>> eval                          # evaluate on Google Analogy Test Set
->>> demo                          # full demonstration (neighbors, analogies, clusters)
+>>> nn king 5                       # 5 nearest neighbors of 'king'
+>>> ana paris france berlin -v tsne # paris - france = ? - berlin + visualization (t-SNE)
+>>> vc king queen computer 3 pca    # clusters for 3 seeds with 3 neighbors each (PCA)
+>>> eval                            # evaluate model on Google Analogy Test Set
+>>> demo                            # full demonstration (neighbors, analogies, clusters)
 ```
 
 
@@ -55,8 +56,8 @@ On first run, models download automatically (~1.5 GB for Word2Vec, ~800 MB for G
 |---------|-------------|
 | `use <model>` | Switch active model: `word2vec` or `glove` |
 | `nn <word> [topn]` | Nearest neighbors (default `topn=5`) |
-| `ana <w1> <w2> <w3> [topn] [-v]` | Solve analogy `w1 - w2 = ? - w3`<br>• `-v`: visualize vector relationships (PCA) |
-| `vc <w1> [w2 ...] [n] [m]` | Visualize semantic clusters:<br>• Seeds: `w1`... (min 1)<br>• `[n]`: neighbors per seed (default 3, max 20)<br>• `[m]`: method `pca` or `tsne` (default `pca`)<br>- **PCA** — _Linear projection_ that preserves **global structure** by mapping vectors onto axes of maximum variance. Fast, but may blur local clusters.<br>- **t-SNE** — _Non-linear projection_ that preserves **local neighborhoods** by modeling pairwise similarities. Slower, but reveals fine-grained clusters at the cost of global geometry.<br>→ **Auto-saved** to `data/visualizations/` |
+| `ana <w1> <w2> <w3> [topn] [-v] [m]` | Solve analogy `w1 - w2 = ? - w3`<br>• `-v`: visualize vector relationships<br>• `[m]`: method `pca` or `tsne` (default `pca`)<br>- **PCA** — _Linear projection_ that preserves **global structure** by mapping vectors onto axes of maximum variance. Fast, but may blur local clusters.<br>- **t-SNE** — _Non-linear projection_ that preserves **local neighborhoods** by modeling pairwise similarities. Slower, but reveals fine-grained clusters at the cost of global geometry.<br>→ **Auto-saved** to `data/visualizations/` |
+| `vc <w1> [w2 ...] [n] [m]` | Visualize semantic clusters:<br>• Seeds: `w1`... (min 1)<br>• `[n]`: neighbors per seed (default 3, max 20)<br>• `[m]`: method `pca` or `tsne` (default `pca`)<br>→ **Auto-saved** to `data/visualizations/` |
 | `eval` | Evaluate current model on Google Analogy Test Set |
 | `model` | Show model info (vocab size, dimension, memory usage) |
 | `demo` | Run full demonstration (nearest neighbors, analogies, clusters for both models) |

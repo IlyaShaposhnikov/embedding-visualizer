@@ -2,6 +2,7 @@
 Query operations on embedding models: nearest neighbors and analogies.
 """
 
+from pathlib import Path
 from typing import List, Tuple, Optional
 
 from gensim.models import KeyedVectors
@@ -99,6 +100,8 @@ def find_analogies(
     topn: int = 3,
     model_name: Optional[str] = None,
     visualize: bool = False,
+    method: str = "pca",
+    save: Optional[Path] = None,
 ) -> List[Tuple[str, float]]:
     """Solve word analogy: w1 - w2 = ? - w3   (vector: w1 - w2 + w3)"""
     results = get_analogy_solution(w1, w2, w3, model, topn=topn)
@@ -124,16 +127,23 @@ def find_analogies(
         print(f"{i:2d}. {candidate:<20s}  {sim:>10.4f}")
     print("─" * 60)
 
-    if visualize and model is not None:
+    # Visualization with auto-saving if requested
+    if visualize and model is not None and results:
         try:
             from src.visualize import visualize_analogy
             visualize_analogy(
                 w1, w2, w3, results,
                 model,
                 model_name=model_name or "Model",
-                method="pca"
+                method=method,
+                save=save
             )
         except Exception as e:
             print(f"Visualization failed: {e}")
+    elif visualize and not results:
+        print(
+            "Cannot visualize: no valid results found "
+            "(words may be missing from vocabulary)."
+        )
 
     return results

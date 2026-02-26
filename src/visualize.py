@@ -3,6 +3,7 @@ Dimensionality reduction and 2D projection of word embeddings.
 Visualizes semantic clusters formed by seed words and their nearest neighbors.
 """
 
+from pathlib import Path
 from typing import List, Tuple, Optional
 
 from gensim.models import KeyedVectors
@@ -237,7 +238,7 @@ def _plot_analogy(
     w3_idx: Optional[int],
     result_indices: List[int],
     title: str,
-    save_path: Optional[str] = None,
+    save_path: Optional[Path] = None,
 ) -> None:
     """Plot analogy with vector arrows and semantic coloring."""
     plt.figure(figsize=(14, 10))
@@ -358,7 +359,7 @@ def _plot_analogy(
 
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        print(f"Analogy visualization saved to {save_path}")
+        print(f"Saved to {save_path.as_posix()}")
 
     plt.show()
 
@@ -371,7 +372,7 @@ def visualize_analogy(
     model: KeyedVectors,
     model_name: str = "Model",
     method: str = "pca",
-    save: Optional[str] = None,
+    save: Optional[Path] = None,
 ) -> None:
     """
     Visualize word analogy with vector relationships.
