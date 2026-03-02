@@ -190,6 +190,7 @@ def interactive_shell(
                         ).strip("_")
                         safe_model_name = re.sub(r"_+", "_", safe_model_name)
                         # Create safe filename from analogy words
+                        # (limit length)
                         analogy_str = f"{w1}_{w2}_{w3}"[:40]
                         filename = (
                             f"analogy_{safe_model_name}_{method}_"

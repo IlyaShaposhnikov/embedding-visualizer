@@ -13,7 +13,9 @@ from gensim.models import KeyedVectors
 from src.queries import get_analogy_solution
 
 
-# Classification of sections (based on original paper)
+# Classification of sections based on the categories
+# defined in the original paper.
+# These sets are used to separate semantic and syntactic accuracy.
 SEMANTIC_SECTIONS = {
     'capital-common-countries', 'capital-world', 'currency',
     'city-in-state', 'family', 'gram6-nationality-adjective'
@@ -28,7 +30,15 @@ SYNTACTIC_SECTIONS = {
 def parse_questions_file(
         file_path: str
 ) -> Dict[str, List[Tuple[str, str, str, str]]]:
-    """Parse Google Analogy test file into sections."""
+    """
+    Parse Google Analogy test file into sections.
+
+    File format:
+      - Lines starting with ':' indicate a section name
+      (e.g., ":capital-common-countries").
+      - Each subsequent line contains four tokens: w1 w2 w3 expected_answer.
+      - Empty lines and lines starting with '//' are ignored.
+    """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Test file not found: {file_path}")
 
@@ -40,9 +50,11 @@ def parse_questions_file(
         for line_num, line in enumerate(f, 1):
             line = line.strip()
 
+            # Skip empty lines and comment lines (//)
             if not line or line.startswith('//'):
                 continue
 
+            # Section header
             if line.startswith(':'):
                 if current_section and questions:
                     sections[current_section] = questions
@@ -51,15 +63,18 @@ def parse_questions_file(
                 questions = []
                 continue
 
+            # Normal question line: w1 w2 w3 expected
             parts = line.split()
             if len(parts) == 4:
                 w1, w2, w3, expected = parts
                 questions.append((w1, w2, w3, expected))
             elif parts:
+                # If line has tokens but not exactly 4, it's malformed
                 print(
                     f"Warning: line {line_num} has unexpected format: '{line}'"
                 )
 
+    # Save the last section
     if current_section and questions:
         sections[current_section] = questions
 
@@ -78,13 +93,19 @@ def evaluate_section(
     model: KeyedVectors,
     verbose: bool = False
 ) -> Tuple[int, int]:
-    """Evaluate model on analogy questions for a single section."""
+    """
+    Evaluate model on analogy questions for a single section.
+    Questions where any of the four words
+    is missing from the vocabulary are skipped.
+    """
     correct = 0
     total = 0
 
     for w1, w2, w3, expected in questions:
+        # Use topn=1 because we only care about the top prediction
         results = get_analogy_solution(w1, w2, w3, model, topn=1)
 
+        # If results is None, at least one word was missing -> skip
         if results is None:
             continue
 
@@ -134,12 +155,14 @@ def evaluate_model(
             acc = correct / total * 100
             section_results.append((section_name, correct, total, acc))
 
+            # Classify section based on its name
             if section_name in SEMANTIC_SECTIONS:
                 semantic_correct += correct
                 semantic_total += total
             elif section_name in SYNTACTIC_SECTIONS:
                 syntactic_correct += correct
                 syntactic_total += total
+            # Sections not listed are ignored in aggregate stats
 
     print(f"\n{'Section':<35} {'Correct':>8} {'Total':>8} {'Accuracy':>10}")
     print("-" * 60)

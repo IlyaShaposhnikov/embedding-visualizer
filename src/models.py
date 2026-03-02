@@ -62,6 +62,7 @@ def load_word2vec_model(
     if bin_path is None:
         bin_path = os.path.join(data_dir, W2V_BIN)
 
+    # Check if the original binary exists and is non-empty
     if not os.path.exists(bin_path) or os.path.getsize(bin_path) == 0:
         print(f"Word2Vec binary not found: {bin_path}")
         print(
@@ -72,7 +73,7 @@ def load_word2vec_model(
 
     cached_path = _get_cached_model_path(bin_path)
 
-    # Try cached model
+    # Try cached model (fast path)
     if use_cached and not force_reload and os.path.exists(cached_path):
         model = _load_cached_model(cached_path, "Word2Vec")
         if model is not None:
@@ -84,6 +85,8 @@ def load_word2vec_model(
         "(this may take several minutes and ~4GB RAM)..."
     )
     try:
+        # Binary format is specific to GoogleNews;
+        # load_word2vec_format handles it
         model = KeyedVectors.load_word2vec_format(bin_path, binary=True)
         print("Word2Vec loaded successfully.")
         print(f"Vocabulary: {len(model):,} words")
@@ -119,6 +122,7 @@ def load_glove_model(
     if txt_path is None:
         txt_path = os.path.join(data_dir, f"glove.{version}.txt")
 
+    # Check if the original text file exists and is non-empty
     if not os.path.exists(txt_path) or os.path.getsize(txt_path) == 0:
         print(f"GloVe file not found: {txt_path}")
         print(
@@ -129,7 +133,7 @@ def load_glove_model(
 
     cached_path = _get_cached_model_path(txt_path)
 
-    # Try cached model
+    # Try cached model (fast path)
     if use_cached and not force_reload and os.path.exists(cached_path):
         model = _load_cached_model(cached_path, "GloVe")
         if model is not None:
@@ -140,6 +144,7 @@ def load_glove_model(
     try:
         # GloVe files are in word2vec format but without the header line.
         # Gensim's glove2word2vec adds the header and saves as a new file.
+        # Use a temporary directory to avoid leaving intermediate files.
         with tempfile.TemporaryDirectory() as tmp_dir:
             w2v_tmp = os.path.join(tmp_dir, "glove_converted.w2v.txt")
             glove2word2vec(txt_path, w2v_tmp)
@@ -176,6 +181,7 @@ def model_info(model: KeyedVectors, name: str = "Model") -> None:
     print(f"Vector dimension: {model.vector_size}")
     print(f"Vector dtype: {model.vectors.dtype}")
     # Estimate memory usage (approximate)
+    # Gensim stores vectors in a numpy array.
     mem_bytes = model.vectors.nbytes
     print(
         f"Vector memory: {mem_bytes / 1024**3:.2f} GB "

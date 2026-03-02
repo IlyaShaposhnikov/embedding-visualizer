@@ -18,8 +18,7 @@ from src.queries import get_nearest_neighbors
 # Default visualization settings
 DEFAULT_N_WORDS = 50
 DEFAULT_METHOD = "pca"
-RANDOM_SEED = 42
-RANDOM_GENERATOR = np.random.default_rng(RANDOM_SEED)
+RANDOM_SEED = 42  # Fixed seed for reproducible PCA/t-SNE results
 
 
 def project_words(
@@ -67,12 +66,14 @@ def project_words(
                     "Use PCA instead or provide more words."
                 )
                 return None
+            # t-SNE perplexity should be less than number of points.
+            # We cap it at (n_samples - 2) to avoid warnings/errors.
             reducer = TSNE(
                 n_components=2,
                 perplexity=min(perplexity, len(valid_words) - 2),
                 random_state=random_state,
-                init="pca",
-                learning_rate="auto",
+                init="pca",  # Initialise with PCA for faster convergence
+                learning_rate="auto",  # Let sklearn set appropriate rate
             )
         else:
             print(f"Unknown method: {method}. Use 'pca' or 'tsne'.")
@@ -103,6 +104,7 @@ def plot_embeddings(
     plt.figure(figsize=figsize)
 
     if labels is not None and seed_words is not None:
+        # Assign distinct colors to clusters using tab10 colormap
         unique_labels = sorted(set(labels))
         colors = plt.cm.tab10(np.linspace(0, 1, len(unique_labels)))
 
@@ -175,7 +177,7 @@ def visualize_word_clusters(
             "Consider using 3-4 words for better readability."
         )
 
-    # Gather words and their cluster labels using nearest_neighbors logic
+    # Collect words and assign cluster labels based on seed index
     word_to_cluster = {}
     cluster_words = []  # list of (word, cluster_id)
 
@@ -185,7 +187,7 @@ def visualize_word_clusters(
             word_to_cluster[seed] = idx
             cluster_words.append((seed, idx))
 
-        # Fetch neighbors using ВАШУ функцию (единая точка контроля)
+        # Fetch neighbors using the shared nearest-neighbor logic
         neighbors = get_nearest_neighbors(seed, model, topn=topn)
         if neighbors:
             for neighbor, _ in neighbors:
@@ -216,8 +218,8 @@ def visualize_word_clusters(
 
     # Plot with colors
     title = (
-        f"{model_name} - {method.upper()} clusters "
-        f"(seeds: {', '.join(seed_words)})"
+        f"{model_name} - {method.upper()} | Semantic Clusters | "
+        f"(Seeds: {', '.join(seed_words)})"
     )
     plot_embeddings(
         coords,
@@ -243,21 +245,32 @@ def _plot_analogy(
     """Plot analogy with vector arrows and semantic coloring."""
     plt.figure(figsize=(14, 10))
 
+    # Color mapping:
+    # 0 (w1) and 3 (results) -> blue, 1 (w2) -> red, 2 (w3) -> green
     colors = {
-        0: '#1f77b4',
-        1: '#d62728',
-        2: '#2ca02c',
-        3: '#1f77b4',
+        0: '#1f77b4',  # blue for w1
+        1: '#d62728',  # red for w2
+        2: '#2ca02c',  # green for w3
+        3: '#1f77b4',  # blue for predicted results (same as w1 side)
+    }
+
+    marker_map = {
+        0: 'o',  # w1 — circle
+        1: 's',  # w2 — square
+        2: '^',  # w3 — triangle
+        3: 'D',  # results — diamond
     }
 
     for i, (word, label) in enumerate(zip(words, labels)):
         plt.scatter(
             coords[i, 0], coords[i, 1],
             color=colors.get(label, '#7f7f7f'),
+            marker=marker_map.get(label, 'o'),
             s=300 if i in [w1_idx, w2_idx, w3_idx] + result_indices else 150,
             edgecolors='k',
             linewidths=1.5,
             alpha=0.9,
+            # Higher zorder brings key points to front
             zorder=3 if i in [w1_idx, w2_idx, w3_idx] + result_indices else 2
         )
         plt.annotate(
@@ -276,35 +289,38 @@ def _plot_analogy(
                 if i in [w1_idx, w2_idx, w3_idx] + result_indices
                 else 'normal'
             ),
-            zorder=4
+            zorder=4  # annotations above points
         )
 
+    # Draw arrow from w2 to w1 representing (w1 - w2)
     if w1_idx is not None and w2_idx is not None:
         # w2 → w1
         arrow = FancyArrowPatch(
             (coords[w2_idx, 0], coords[w2_idx, 1]),
             (coords[w1_idx, 0], coords[w1_idx, 1]),
             arrowstyle='->,head_width=0.8,head_length=1.2',
-            color='#1f77b4',
+            color='#d62728',
             linewidth=2.5,
             alpha=0.7,
-            zorder=1
+            zorder=1  # arrows behind points
         )
         plt.gca().add_patch(arrow)
+        # Place text at midpoint of arrow
         plt.text(
             (coords[w2_idx, 0] + coords[w1_idx, 0]) / 2,
             (coords[w2_idx, 1] + coords[w1_idx, 1]) / 2,
             'w1 - w2',
             fontsize=10,
-            color='#1f77b4',
+            color='#d62728',
             fontweight='bold',
             ha='center',
             va='bottom'
         )
 
+    # Draw arrow from the top result to w3 representing (? - w3)
     if w3_idx is not None and result_indices:
         # result → w3
-        result_idx = result_indices[0]
+        result_idx = result_indices[0]  # use the top predicted word
         arrow = FancyArrowPatch(
             (coords[result_idx, 0], coords[result_idx, 1]),
             (coords[w3_idx, 0], coords[w3_idx, 1]),
@@ -326,6 +342,7 @@ def _plot_analogy(
             va='bottom'
         )
 
+    # Build custom legend
     legend_elements = [
         plt.Line2D(
             [0], [0], marker='o', color='w', markerfacecolor='#1f77b4',
@@ -384,6 +401,7 @@ def visualize_analogy(
 
     Shows vector arrows: w2 → w1 and predicted → w3
     """
+    # Collect all words to be plotted
     words = [w1, w2, w3] + [word for word, _ in results]
 
     valid_words = [w for w in words if w in model.key_to_index]
@@ -395,6 +413,7 @@ def visualize_analogy(
     if coords is None or len(coords) != len(valid_words):
         return
 
+    # Assign label: 0 for w1, 1 for w2, 2 for w3, 3 for predicted results
     word_to_idx = {word: i for i, word in enumerate(valid_words)}
     labels = []
     for word in valid_words:
@@ -407,7 +426,9 @@ def visualize_analogy(
         else:
             labels.append(3)
 
-    title = f"{model_name} | Analogy: {w1} - {w2} = ? - {w3}"
+    title = (
+        f"{model_name} - {method.upper()} | Analogy: {w1} - {w2} = ? - {w3}"
+    )
     _plot_analogy(
         coords,
         valid_words,

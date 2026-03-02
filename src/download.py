@@ -274,7 +274,7 @@ def download_glove_model(
     if os.path.exists(txt_path):
         if verify_file_size(txt_path, expected_txt_size, strict=False):
             print(f"GloVe {version} already exists: {txt_path}")
-            # Проверка читаемости файла
+            # Verify file readability
             try:
                 with open(txt_path, 'r', encoding='utf-8') as f:
                     sample = f.read(1024)
