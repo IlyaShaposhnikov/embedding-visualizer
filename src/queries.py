@@ -7,26 +7,10 @@ from typing import List, Tuple, Optional
 
 from gensim.models import KeyedVectors
 
-
-def get_nearest_neighbors(
-    word: str,
-    model: KeyedVectors,
-    topn: int = 5,
-) -> Optional[List[Tuple[str, float]]]:
-    """
-    Get nearest neighbors without printing.
-    Returns list of (neighbor, similarity) tuples or None if word not found.
-    """
-    if model is None:
-        return None
-
-    if word not in model.key_to_index:
-        return None
-
-    try:
-        return model.most_similar(positive=[word], topn=topn)
-    except Exception:
-        return None
+from src.data.data_extraction import (
+    get_nearest_neighbors, get_analogy_solution
+)
+from src.visualize import visualize_analogy
 
 
 def nearest_neighbors(
@@ -61,35 +45,6 @@ def nearest_neighbors(
     print("─" * 60)
 
     return results
-
-
-def get_analogy_solution(
-    w1: str,
-    w2: str,
-    w3: str,
-    model: KeyedVectors,
-    topn: int = 1,
-) -> Optional[List[Tuple[str, float]]]:
-    """
-    Solve word analogy without printing.
-    Returns list of (candidate, similarity) tuples
-    or None if words missing/error.
-    """
-    if model is None:
-        return None
-
-    # Check that all input words exist in vocabulary
-    missing = [word for word in (w1, w2, w3) if word not in model.key_to_index]
-    if missing:
-        return None
-
-    try:
-        # Vector arithmetic: w1 - w2 + w3
-        return model.most_similar(
-            positive=[w1, w3], negative=[w2], topn=topn
-        )
-    except Exception:
-        return None
 
 
 def find_analogies(
@@ -130,7 +85,6 @@ def find_analogies(
     # Visualization with auto-saving if requested
     if visualize and model is not None and results:
         try:
-            from src.visualize import visualize_analogy
             visualize_analogy(
                 w1, w2, w3, results,
                 model,

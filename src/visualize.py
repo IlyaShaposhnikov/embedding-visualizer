@@ -13,7 +13,7 @@ import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
-from src.queries import get_nearest_neighbors
+from src.data.data_extraction import get_nearest_neighbors
 
 # Default visualization settings
 DEFAULT_N_WORDS = 50

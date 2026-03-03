@@ -10,7 +10,7 @@ from typing import Dict, List, Tuple
 
 from gensim.models import KeyedVectors
 
-from src.queries import get_analogy_solution
+from src.data.data_extraction import get_analogy_solution
 
 
 # Classification of sections based on the categories
