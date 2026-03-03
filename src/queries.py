@@ -2,6 +2,7 @@
 Query operations on embedding models: nearest neighbors and analogies.
 """
 
+import logging
 from pathlib import Path
 from typing import List, Tuple, Optional
 
@@ -11,6 +12,8 @@ from src.data.data_extraction import (
     get_nearest_neighbors, get_analogy_solution
 )
 from src.visualize import visualize_analogy
+
+logger = logging.getLogger(__name__)
 
 
 def nearest_neighbors(
@@ -25,7 +28,7 @@ def nearest_neighbors(
     Returns empty list if word not found.
     """
     if model is None:
-        print("Model is None. Load a model first.")
+        print("Load a model first.")
         return []
 
     results = get_nearest_neighbors(word, model, topn)
@@ -35,7 +38,7 @@ def nearest_neighbors(
         print(f"Sample vocabulary: {', '.join(sample)}")
         return []
 
-    # Pretty print with model name
+    # Pretty output
     model_label = f"{model_name}" if model_name else ""
     print(f"\n{model_label} | NEAREST NEIGHBORS: '{word}'")
     print("─" * 60)
@@ -69,7 +72,9 @@ def find_analogies(
                 word for word in (w1, w2, w3) if word not in model.key_to_index
             ]
             if missing:
-                print(f"Words not in vocabulary: {', '.join(missing)}")
+                print(
+                    f"Words not in vocabulary: {', '.join(missing)}"
+                )
         return []
 
     # Pretty output

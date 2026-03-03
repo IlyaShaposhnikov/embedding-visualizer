@@ -4,12 +4,15 @@ All functions include error handling and detailed console feedback.
 """
 
 import gzip
+import logging
 import os
 import shutil
-import zipfile
 from typing import Optional
+import zipfile
 
 import gdown
+
+logger = logging.getLogger(__name__)
 
 # Word2Vec Source
 W2V_URL = "https://drive.google.com/uc?id=0B7XkCwpI5KDYNlNUTTlSS21pQmM"
@@ -48,13 +51,13 @@ def verify_file_size(
     actual_size = os.path.getsize(file_path)
 
     if actual_size == 0:
-        print(f"File is empty: {file_path}")
+        logger.warning(f"File is empty: {file_path}")
         return False
 
     if actual_size != expected_size:
         diff_pct = abs(actual_size - expected_size) / expected_size * 100
         if strict or diff_pct > 5.0:
-            print(
+            logger.warning(
                 f"Size mismatch ({diff_pct:.1f}%): "
                 f"expected {expected_size:,} bytes, "
                 f"got {actual_size:,} bytes"
@@ -72,7 +75,7 @@ def extract_gzip(gz_path: str, bin_path: str) -> bool:
                 shutil.copyfileobj(f_in, f_out)
         return True
     except (gzip.BadGzipFile, OSError) as e:
-        print(f"Extraction failed: {e}")
+        logger.error(f"Extraction failed: {e}")
         return False
 
 
@@ -95,18 +98,18 @@ def download_word2vec_model(
         for path, name in [(bin_path, "binary"), (gz_path, "compressed")]:
             if os.path.exists(path):
                 os.remove(path)
-                print(f"Removed cached {name} file: {path}")
+                logger.info(f"Removed cached {name} file: {path}")
 
     # Check if valid uncompressed binary already exists
     if os.path.exists(bin_path):
         if verify_file_size(bin_path, W2V_SIZE, strict=False):
-            print(f"Word2Vec binary exists: {bin_path}")
+            logger.info(f"Word2Vec binary exists: {bin_path}")
             try:
                 with open(bin_path, 'rb') as f:
                     f.read(1024)
                 return bin_path
             except Exception as e:
-                print(
+                logger.warning(
                     "File exists but appears corrupted: "
                     f"{e}. Re-downloading..."
                 )
@@ -117,34 +120,36 @@ def download_word2vec_model(
         size_diff_pct = abs(actual_gz_size - W2V_GZ_SIZE) / W2V_GZ_SIZE * 100
 
         if verify_file_size(gz_path, W2V_GZ_SIZE, strict=False):
-            print(f"Found compressed file (size OK), extracting: {gz_path}")
+            logger.info(
+                f"Found compressed file (size OK), extracting: {gz_path}"
+            )
             if extract_gzip(gz_path, bin_path):
                 if verify_file_size(bin_path, W2V_SIZE, strict=False):
-                    print(f"Extraction complete: {bin_path}")
+                    logger.info(f"Extraction complete: {bin_path}")
                     return bin_path
                 else:
-                    print(
+                    logger.warning(
                         "Extracted file has incorrect size. "
                         "Re-downloading..."
                     )
         else:
             if size_diff_pct > 5.0:
-                print(
+                logger.info(
                     f"Re-downloading due to significant size mismatch "
                     f"({size_diff_pct:.1f}%)..."
                 )
                 os.remove(gz_path)
             else:
-                print(
+                logger.info(
                     f"Size slightly differs ({size_diff_pct:.1f}%) "
                     f"but proceeding with extraction..."
                 )
                 if extract_gzip(gz_path, bin_path):
                     if verify_file_size(bin_path, W2V_SIZE, strict=False):
-                        print(f"Extraction complete: {bin_path}")
+                        logger.info(f"Extraction complete: {bin_path}")
                         return bin_path
                     else:
-                        print(
+                        logger.warning(
                             "Extracted file has incorrect size. "
                             "Re-downloading..."
                         )
@@ -154,15 +159,17 @@ def download_word2vec_model(
     required_space = W2V_SIZE + W2V_GZ_SIZE + 500_000_000
     free_space = shutil.disk_usage(data_dir).free
     if free_space < required_space:
-        print(f"Insufficient disk space. Need ~{required_space / 1024**3:.1f} "
-              f"GB, have {free_space / 1024**3:.1f} GB available.")
+        logger.error(
+            f"Insufficient disk space. Need ~{required_space / 1024**3:.1f} "
+            f"GB, have {free_space / 1024**3:.1f} GB available."
+        )
         return None
 
     # Download from Google Drive
-    print(
+    logger.info(
         "Downloading Word2Vec model (GoogleNews-vectors-negative300.bin.gz)..."
     )
-    print(
+    logger.info(
         f"This file is ~{W2V_GZ_SIZE / 1024**3:.1f} GB compressed, "
         f"~{W2V_SIZE / 1024**3:.1f} GB uncompressed. "
         "May take several minutes."
@@ -171,48 +178,48 @@ def download_word2vec_model(
     try:
         gdown.download(W2V_URL, gz_path, quiet=False)
     except Exception as e:
-        print(f"Download failed: {e}. Trying mirror...")
+        logger.warning(f"Download failed: {e}. Trying mirror...")
         try:
             gdown.download(W2V_URL_MIRROR, gz_path, quiet=False)
         except Exception as mirror_e:
-            print(f"Mirror download failed: {mirror_e}")
-            print(
+            logger.error(f"Mirror download failed: {mirror_e}")
+            logger.info(
                 f"Download manually: {W2V_URL} or {W2V_URL_MIRROR}"
             )
-            print(f"Save as: {gz_path}")
+            logger.info(f"Save as: {gz_path}")
             return None
 
     # Verify downloaded .gz file size before extraction
     if not os.path.exists(gz_path):
-        print("Downloaded file not found.")
+        logger.error("Downloaded file not found.")
         return None
 
     gz_size = os.path.getsize(gz_path)
-    print(f"Downloaded compressed file size: {gz_size / 1024**3:.2f} GB")
+    logger.info(f"Downloaded compressed file size: {gz_size / 1024**3:.2f} GB")
 
     if not verify_file_size(gz_path, W2V_GZ_SIZE, strict=False):
         diff_pct = abs(gz_size - W2V_GZ_SIZE) / W2V_GZ_SIZE * 100
-        print(
+        logger.warning(
             f"Size mismatch ({diff_pct:.1f}%): "
             f"expected {W2V_GZ_SIZE:,} bytes, "
             f"got {gz_size:,} bytes, proceeding anyway"
         )
 
     # Extract the archive
-    print("Extracting compressed file...")
+    logger.info("Extracting compressed file...")
     if not extract_gzip(gz_path, bin_path):
         return None
 
-    print(f"Extraction complete: {bin_path}")
+    logger.info(f"Extraction complete: {bin_path}")
 
     # Final verification of uncompressed file
     if verify_file_size(bin_path, W2V_SIZE, strict=False):
-        print(f"Word2Vec (GoogleNews) ready: {bin_path}")
+        logger.info(f"Word2Vec (GoogleNews) ready: {bin_path}")
         return bin_path
     else:
         actual = os.path.getsize(bin_path)
         diff_pct = abs(actual - W2V_SIZE) / W2V_SIZE * 100
-        print(
+        logger.warning(
             f"Size mismatch after extraction ({diff_pct:.1f}%): "
             f"expected {W2V_SIZE:,} bytes, got {actual:,} bytes"
             "File may still be usable."
@@ -254,8 +261,8 @@ def download_glove_model(
     """
     expected_txt_size = GLOVE_TXT_SIZES.get(version)
     if expected_txt_size is None:
-        print(f"Unknown GloVe version: {version}")
-        print("Available: 6B.50d, 6B.100d, 6B.200d, 6B.300d")
+        logger.error(f"Unknown GloVe version: {version}")
+        logger.info("Available: 6B.50d, 6B.100d, 6B.200d, 6B.300d")
         return None
 
     os.makedirs(data_dir, exist_ok=True)
@@ -268,12 +275,12 @@ def download_glove_model(
         for path in [txt_path, zip_path]:
             if os.path.exists(path):
                 os.remove(path)
-                print(f"Removed cached file: {path}")
+                logger.info(f"Removed cached file: {path}")
 
     # Check if target .txt already exists and is valid
     if os.path.exists(txt_path):
         if verify_file_size(txt_path, expected_txt_size, strict=False):
-            print(f"GloVe {version} already exists: {txt_path}")
+            logger.info(f"GloVe {version} already exists: {txt_path}")
             # Verify file readability
             try:
                 with open(txt_path, 'r', encoding='utf-8') as f:
@@ -282,7 +289,7 @@ def download_glove_model(
                         raise ValueError("File appears empty")
                 return txt_path
             except Exception as e:
-                print(
+                logger.warning(
                     f"File exists but is unreadable: {e}. "
                     "Re-downloading..."
                 )
@@ -290,7 +297,7 @@ def download_glove_model(
                     os.remove(txt_path)
         else:
             actual = os.path.getsize(txt_path)
-            print(
+            logger.warning(
                 f"Size mismatch for {version}: "
                 f"expected {expected_txt_size:,} bytes, "
                 f"got {actual:,} bytes"
@@ -306,7 +313,7 @@ def download_glove_model(
     )
 
     if zip_valid and not force_download:
-        print(f"Found valid zip archive: {zip_path}")
+        logger.info(f"Found valid zip archive: {zip_path}")
         # Try to extract only the needed file
         if extract_glove_single_file(zip_path, version, data_dir):
             try:
@@ -315,26 +322,28 @@ def download_glove_model(
                     if not sample.strip():
                         raise ValueError("Extracted file appears empty")
             except Exception as e:
-                print(f"Extracted file is unreadable: {e}. Re-downloading...")
+                logger.warning(
+                    f"Extracted file is unreadable: {e}. Re-downloading..."
+                )
                 if os.path.exists(txt_path):
                     os.remove(txt_path)
             else:
                 if verify_glove_txt(data_dir, version):
-                    print(f"Extracted {version} from existing zip.")
+                    logger.info(f"Extracted {version} from existing zip.")
                     # If keep_zip=True, keep .zip archive after extraction
                     # (default False — delete to save space)
                     if not keep_zip:
                         os.remove(zip_path)
-                        print(
+                        logger.info(
                             "Removed zip archive "
                             "(use keep_zip=True to retain)."
                         )
                     return txt_path
         else:
-            print("Extraction failed, will re-download full archive.")
+            logger.warning("Extraction failed, will re-download full archive.")
     else:
         if os.path.exists(zip_path):
-            print(
+            logger.warning(
                 "Zip archive has incorrect size or corrupted. "
                 "Re-downloading..."
             )
@@ -344,7 +353,7 @@ def download_glove_model(
     required_space = GLOVE_ZIP_SIZE + expected_txt_size + 200_000_000
     free_space = shutil.disk_usage(data_dir).free
     if free_space < required_space:
-        print(
+        logger.warning(
             "Insufficient disk space. Need ~"
             f"{required_space / 1024**3:.1f} GB, "
             f"have {free_space / 1024**3:.1f} GB available."
@@ -352,8 +361,8 @@ def download_glove_model(
         return None
 
     # Download full zip archive
-    print(f"Downloading GloVe {version} (full archive: glove.6B.zip)...")
-    print(
+    logger.info(f"Downloading GloVe {version} (full archive: glove.6B.zip)...")
+    logger.info(
         f"This file is ~{GLOVE_ZIP_SIZE / 1024**2:.0f} MB compressed, "
         "contains all 4 vector sizes."
     )
@@ -361,21 +370,21 @@ def download_glove_model(
     try:
         gdown.download(GLOVE_URL, zip_path, quiet=False)
     except Exception as e:
-        print(f"\nDownload failed: {e}")
-        print(f"Download manually: {GLOVE_URL}")
-        print(f"Save as: {zip_path}")
+        logger.error(f"\nDownload failed: {e}")
+        logger.info(f"Download manually: {GLOVE_URL}")
+        logger.info(f"Save as: {zip_path}")
         return None
 
     # Verify downloaded zip
     if not os.path.exists(zip_path):
-        print("Downloaded zip file not found.")
+        logger.error("Downloaded zip file not found.")
         return None
 
     zip_size = os.path.getsize(zip_path)
-    print(f"Downloaded zip size: {zip_size / 1024**3:.2f} GB")
+    logger.info(f"Downloaded zip size: {zip_size / 1024**3:.2f} GB")
 
     if not verify_file_size(zip_path, GLOVE_ZIP_SIZE, strict=False):
-        print(
+        logger.warning(
             f"Zip size mismatch: expected {GLOVE_ZIP_SIZE} bytes, "
             f"got {zip_size} bytes, proceeding anyway"
         )
@@ -390,24 +399,24 @@ def download_glove_model(
             if not sample.strip():
                 raise ValueError("Extracted file appears empty")
     except Exception as e:
-        print(f"Extracted file is unreadable: {e}. Re-downloading...")
+        logger.warning(f"Extracted file is unreadable: {e}. Re-downloading...")
         if os.path.exists(txt_path):
             os.remove(txt_path)
         return None
 
     # Verify extracted .txt file
     if verify_glove_txt(data_dir, version):
-        print(f"GloVe ({version}) ready: {txt_path}")
+        logger.info(f"GloVe ({version}) ready: {txt_path}")
 
         # Cleanup zip unless requested otherwise
         if not keep_zip and os.path.exists(zip_path):
             os.remove(zip_path)
-            print("Removed zip archive (use keep_zip=True to retain).")
+            logger.info("Removed zip archive (use keep_zip=True to retain).")
 
         return txt_path
     else:
         actual = os.path.getsize(txt_path) if os.path.exists(txt_path) else 0
-        print(
+        logger.warning(
             f"Size mismatch for {version}: "
             f"expected {expected_txt_size:,} bytes, got {actual:,} bytes"
         )
@@ -424,19 +433,19 @@ def extract_glove_single_file(
         with zipfile.ZipFile(zip_path, 'r') as zf:
             # Check if file exists in archive
             if txt_filename not in zf.namelist():
-                print(f"{txt_filename} not found in zip archive.")
+                logger.error(f"{txt_filename} not found in zip archive.")
                 return False
 
-            print(f"Extracting {txt_filename}...")
+            logger.info(f"Extracting {txt_filename}...")
             zf.extract(txt_filename, data_dir)
 
         return True
 
     except zipfile.BadZipFile:
-        print("Corrupted zip file.")
+        logger.error("Corrupted zip file.")
         return False
     except Exception as e:
-        print(f"Extraction failed: {e}")
+        logger.error(f"Extraction failed: {e}")
         return False
 
 
@@ -451,19 +460,19 @@ def download_analogy_test_set(data_dir: str = "data") -> Optional[str]:
     dest = os.path.join(data_dir, QUESTIONS_FILE)
 
     if os.path.exists(dest) and os.path.getsize(dest) > 0:
-        print(f"Analogy test set already exists: {dest}")
+        logger.info(f"Analogy test set already exists: {dest}")
         return dest
 
-    print("Downloading Google Analogy Test Set (questions-words.txt)...")
-    print("Source: Tomas Mikolov et al. (2013)")
-    print("Contains 19,544 questions (semantic + syntactic)")
+    logger.info("Downloading Google Analogy Test Set (questions-words.txt)...")
+    logger.info("Source: Tomas Mikolov et al. (2013)")
+    logger.info("Contains 19,544 questions (semantic + syntactic)")
 
     try:
         gdown.download(QUESTIONS_URL, dest, quiet=False)
-        print(f"\nDownload complete: {dest}")
+        logger.info(f"\nDownload complete: {dest}")
 
         if os.path.getsize(dest) < 500_000:
-            print(
+            logger.warning(
                 "Warning: file size is small "
                 f"({os.path.getsize(dest):,} bytes)"
             )
@@ -471,7 +480,7 @@ def download_analogy_test_set(data_dir: str = "data") -> Optional[str]:
 
         return dest
     except Exception as e:
-        print(f"Download failed: {e}")
-        print(f"Try manual download: {QUESTIONS_URL}")
-        print(f"Save as: {dest}")
+        logger.error(f"Download failed: {e}")
+        logger.info(f"Try manual download: {QUESTIONS_URL}")
+        logger.info(f"Save as: {dest}")
         return None

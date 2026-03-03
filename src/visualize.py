@@ -3,6 +3,7 @@ Dimensionality reduction and 2D projection of word embeddings.
 Visualizes semantic clusters formed by seed words and their nearest neighbors.
 """
 
+import logging
 from pathlib import Path
 from typing import List, Tuple, Optional
 
@@ -14,6 +15,8 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
 from src.data.data_extraction import get_nearest_neighbors
+
+logger = logging.getLogger(__name__)
 
 # Default visualization settings
 DEFAULT_N_WORDS = 50
@@ -161,7 +164,7 @@ def visualize_word_clusters(
     and their nearest neighbors.
     """
     if model is None:
-        print("Model is None. Load a model first.")
+        print("Load a model first.")
         return
 
     # Validate seed words

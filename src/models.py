@@ -9,10 +9,13 @@ Features:
 
 import os
 import tempfile
+import logging
 from typing import Optional
 
 from gensim.models import KeyedVectors
 from gensim.scripts.glove2word2vec import glove2word2vec
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_DATA_DIR = "data"
 W2V_BIN = "GoogleNews-vectors-negative300.bin"
@@ -31,18 +34,18 @@ def _load_cached_model(
 ) -> Optional[KeyedVectors]:
     """Load model from cache with integrity validation."""
     try:
-        print(f"Loading cached {model_name} model: {cached_path}")
+        logger.info(f"Loading cached {model_name} model: {cached_path}")
         model = KeyedVectors.load(cached_path)
         # Validate integrity: non-empty vocabulary and valid dimensionality
         if len(model) == 0 or model.vector_size == 0:
             raise ValueError("Cached model is empty/corrupted")
-        print(
+        logger.info(
             f"Loaded from cache (vocab size: {len(model):,}, "
             f"dim: {model.vector_size})"
         )
         return model
     except (EOFError, ValueError, KeyError, OSError) as e:
-        print(
+        logger.warning(
             f"Corrupted {model_name} cache "
             f"({type(e).__name__}): {e}. Rebuilding from source..."
         )
@@ -80,7 +83,7 @@ def load_word2vec_model(
             return model
 
     # Load from original .bin (slow, memory heavy)
-    print(
+    logger.info(
         "Loading Word2Vec from binary "
         "(this may take several minutes and ~4GB RAM)..."
     )
@@ -88,18 +91,18 @@ def load_word2vec_model(
         # Binary format is specific to GoogleNews;
         # load_word2vec_format handles it
         model = KeyedVectors.load_word2vec_format(bin_path, binary=True)
-        print("Word2Vec loaded successfully.")
-        print(f"Vocabulary: {len(model):,} words")
-        print(f"Vector dimension: {model.vector_size}")
+        logger.info("Word2Vec loaded successfully.")
+        logger.info(f"Vocabulary: {len(model):,} words")
+        logger.info(f"Vector dimension: {model.vector_size}")
 
         # Save to cache for future fast loading
         if use_cached:
             try:
-                print(f"Saving cached model to {cached_path} ...")
+                logger.info(f"Saving cached model to {cached_path} ...")
                 model.save(cached_path)
-                print("Cached model saved (next load will be instant).")
+                logger.info("Cached model saved (next load will be instant).")
             except Exception as e:
-                print(f"Could not save cache: {e}")
+                logger.warning(f"Could not save cache: {e}")
 
         return model
 
@@ -140,7 +143,7 @@ def load_glove_model(
             return model
 
     # Convert GloVe .txt → Word2Vec .txt (temporary) and load
-    print(f"Converting and loading GloVe from {txt_path} ...")
+    logger.info(f"Converting and loading GloVe from {txt_path} ...")
     try:
         # GloVe files are in word2vec format but without the header line.
         # Gensim's glove2word2vec adds the header and saves as a new file.
@@ -150,18 +153,18 @@ def load_glove_model(
             glove2word2vec(txt_path, w2v_tmp)
             model = KeyedVectors.load_word2vec_format(w2v_tmp, binary=False)
 
-        print("GloVe loaded successfully.")
-        print(f"Vocabulary: {len(model):,} words")
-        print(f"Vector dimension: {model.vector_size}")
+        logger.info("GloVe loaded successfully.")
+        logger.info(f"Vocabulary: {len(model):,} words")
+        logger.info(f"Vector dimension: {model.vector_size}")
 
         # Save to cache
         if use_cached:
             try:
-                print(f"Saving cached model to {cached_path} ...")
+                logger.info(f"Saving cached model to {cached_path} ...")
                 model.save(cached_path)
-                print("Cached model saved (next load will be instant).")
+                logger.info("Cached model saved (next load will be instant).")
             except Exception as e:
-                print(f"Could not save cache: {e}")
+                logger.warning(f"Could not save cache: {e}")
 
         return model
 

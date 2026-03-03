@@ -5,6 +5,7 @@ Source: Mikolov et al., "Efficient Estimation of Word Representations
 in Vector Space" (2013)
 """
 
+import logging
 import os
 from typing import Dict, List, Tuple
 
@@ -12,6 +13,7 @@ from gensim.models import KeyedVectors
 
 from src.data.data_extraction import get_analogy_solution
 
+logger = logging.getLogger(__name__)
 
 # Classification of sections based on the categories
 # defined in the original paper.
@@ -70,7 +72,7 @@ def parse_questions_file(
                 questions.append((w1, w2, w3, expected))
             elif parts:
                 # If line has tokens but not exactly 4, it's malformed
-                print(
+                logger.warning(
                     f"Warning: line {line_num} has unexpected format: '{line}'"
                 )
 
@@ -82,7 +84,7 @@ def parse_questions_file(
         raise ValueError(f"No valid questions found in {file_path}")
 
     total_questions = sum(len(q) for q in sections.values())
-    print(
+    logger.info(
         f"Parsed {len(sections)} sections with {total_questions:,} questions"
     )
     return sections
@@ -126,7 +128,7 @@ def evaluate_model(
 ) -> None:
     """Evaluate embedding model on Google Analogy Test Set."""
     if model is None:
-        print("Model is None. Load a model first.")
+        print("Load a model first.")
         return
 
     if not os.path.exists(test_file):
@@ -164,7 +166,9 @@ def evaluate_model(
                 syntactic_total += total
             # Sections not listed are ignored in aggregate stats
 
-    print(f"\n{'Section':<35} {'Correct':>8} {'Total':>8} {'Accuracy':>10}")
+    print(
+        f"\n{'Section':<35} {'Correct':>8} {'Total':>8} {'Accuracy':>10}"
+    )
     print("-" * 60)
 
     for section, corr, tot, acc in section_results:
@@ -206,7 +210,9 @@ def evaluate_model(
 
     print("=" * 60)
     print("Interpretation:")
-    print("• Semantic accuracy: measures understanding of meaning relations")
+    print(
+        "• Semantic accuracy: measures understanding of meaning relations"
+    )
     print(
         "• Syntactic accuracy: measures understanding of grammatical patterns"
     )

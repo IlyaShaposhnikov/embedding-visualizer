@@ -3,6 +3,7 @@ Interactive terminal interface.
 Allows users to query nearest neighbors and word analogies in real time.
 """
 from datetime import datetime
+import logging
 from pathlib import Path
 import re
 from typing import Optional
@@ -14,6 +15,8 @@ from src.evaluate import evaluate_model
 from src.models import model_info
 from src.queries import find_analogies, nearest_neighbors
 from src.visualize import visualize_word_clusters
+
+logger = logging.getLogger(__name__)
 
 MAX_TOPN = 50
 VIZ_SAVE_DIR = "data/visualizations"
@@ -99,7 +102,9 @@ def interactive_shell(
                             f"Available models: {', '.join(available_models)}"
                         )
                     else:
-                        print("No models loaded. Run download scripts first.")
+                        print(
+                            "No models loaded. Run download scripts first."
+                        )
 
             elif cmd.startswith("nn "):
                 # Nearest neighbors: nn king [5]
@@ -120,13 +125,13 @@ def interactive_shell(
                         )
                         topn = MAX_TOPN
                 except ValueError:
-                    print(
+                    logger.error(
                         f"Invalid number: '{parts[2]}'. "
                         "Please use an integer (e.g., 5)."
                     )
                     continue
                 if current_model is None:
-                    print("No model loaded. Use 'use <model>' first.")
+                    logger.error("No model loaded. Use 'use <model>' first.")
                 else:
                     nearest_neighbors(
                         word, current_model, topn=topn, model_name=model_name
@@ -138,7 +143,9 @@ def interactive_shell(
                 # then check for method at the end
                 parts = cmd.split()
                 if len(parts) < 4:
-                    print("Usage: ana <w1> <w2> <w3> [topn] [-v] [pca|tsne]")
+                    print(
+                        "Usage: ana <w1> <w2> <w3> [topn] [-v] [pca|tsne]"
+                    )
                     continue
 
                 # Extract visualization flag before parsing other arguments
@@ -177,7 +184,7 @@ def interactive_shell(
                     topn = 3
 
                 if current_model is None:
-                    print("No model loaded. Use 'use <model>' first.")
+                    logger.error("No model loaded. Use 'use <model>' first.")
                 else:
                     # Generate save path if visualization is requested
                     save_path = None
@@ -212,7 +219,9 @@ def interactive_shell(
                 # Parse from the end
                 parts = cmd.split()
                 if len(parts) < 2:
-                    print("Usage: vc <word1> [word2 ...] [topn] [pca|tsne]")
+                    print(
+                        "Usage: vc <word1> [word2 ...] [topn] [pca|tsne]"
+                    )
                     continue
 
                 words = []
@@ -230,7 +239,7 @@ def interactive_shell(
                 if args and args[-1].isdigit():
                     topn = int(args[-1])
                     if topn < 1:
-                        print("Error: topn must be at least 1.")
+                        print("topn must be at least 1.")
                         continue
                     if topn > 20:
                         print(
