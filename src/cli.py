@@ -134,79 +134,52 @@ def interactive_shell(
 
             elif cmd.startswith("ana "):
                 # Analogy: ana king man woman [topn] [-v] [pca|tsne]
-                # Parsing strategy: extract -v flag first,
-                # then check for method at the end
+                # Parsing order: -v flag → w1,w2,w3 → method (end) → topn (end)
                 parts = cmd.split()
                 if len(parts) < 4:
-                    print(
-                        "Usage: ana <w1> <w2> <w3> [topn] [-v] [pca|tsne]"
-                    )
+                    print("Usage: ana <w1> <w2> <w3> [topn] [-v] [pca|tsne]")
                     continue
 
-                # Extract visualization flag before parsing other arguments
+                # Extract visualization flag (-v) from anywhere in command
                 visualize = "-v" in parts
                 if visualize:
                     parts.remove("-v")
 
-                # Default method is PCA;
-                # check last argument for method override
-                method = settings.DEFAULT_VIZ_METHOD
-                if parts[-1].lower() in ("pca", "tsne"):
-                    method = parts[-1].lower()
-                    parts = parts[:-1]
-
+                # Re-validate after removing -v (command may become invalid)
+                if len(parts) < 4:
+                    print("Usage: ana <w1> <w2> <w3> [topn] [-v] [pca|tsne]")
+                    continue
                 w1, w2, w3 = parts[1:4]
 
-                # Parse optional topn, default to settings.DEFAULT_TOPN_ANA
-                try:
-                    topn = (
-                        int(parts[4]) if len(parts) > 4
-                        else settings.DEFAULT_TOPN_ANA
-                    )
-                    if topn < 1:
-                        print("topn must be at least 1.")
-                        continue
-                    if topn > settings.MAX_TOPN:
-                        print(
-                            "Warning: topn capped at "
-                            f"{settings.MAX_TOPN} (requested {topn})"
-                        )
-                        topn = settings.MAX_TOPN
-                except (ValueError, IndexError):
-                    # Safely handle missing or invalid topn value
-                    invalid_val = parts[4] if len(parts) > 4 else "missing"
-                    print(
-                        f"Invalid number: '{invalid_val}'. "
-                        "topn set to default value "
-                        f"({settings.DEFAULT_TOPN_ANA})."
-                    )
-                    topn = settings.DEFAULT_TOPN_ANA
+                # Prepare remaining arguments for method/topn parsing
+                remaining_args = parts[4:]
 
+                # Parse visualization method from the end (pca|tsne)
+                method, remaining_args = _parse_method(
+                    remaining_args, settings.DEFAULT_VIZ_METHOD
+                )
+                # Parse topn from what remains (validates range & format)
+                topn = _parse_topn(
+                    remaining_args,
+                    settings.DEFAULT_TOPN_ANA,
+                    settings.MAX_TOPN,
+                    "ana"
+                )
+                if topn is None:
+                    # Invalid topn value — skip command
+                    continue
+
+                # Execute analogy query if model is loaded
                 if current_model is None:
                     print("No model loaded. Use 'use <model>' first.")
                 else:
-                    # Generate save path if visualization is requested
+                    # Generate save path only if visualization is requested
                     save_path = None
                     if visualize:
-                        Path(
-                            settings.VIZ_DIR
-                        ).mkdir(parents=True, exist_ok=True)
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        # Sanitize model name for filename
-                        safe_model_name = re.sub(
-                            r"[^\w\-]", "_", model_name
-                        ).strip("_")
-                        safe_model_name = re.sub(r"_+", "_", safe_model_name)
-                        # Create safe filename from analogy words
-                        # (limit length)
-                        analogy_str = f"{w1}_{w2}_{w3}"[:40]
-                        filename = (
-                            f"analogy_{safe_model_name}_{method}_"
-                            f"{analogy_str}_top{topn}_{timestamp}.png"
+                        save_path = _generate_viz_save_path(
+                            [w1, w2, w3], model_name, method, topn, "analogy"
                         )
-                        save_path = Path(settings.VIZ_DIR) / filename
 
-                    # Execute analogy query with visualization parameters
                     find_analogies(
                         w1, w2, w3, current_model, topn=topn,
                         model_name=model_name,
@@ -217,65 +190,55 @@ def interactive_shell(
 
             elif cmd.startswith("vc "):
                 # Usage: vc <word1> [word2 ...] [topn] [pca|tsne]
-                # Parse from the end
+                # Parsing order: method (end) → topn (end) → remaining = words
                 parts = cmd.split()
                 if len(parts) < 2:
-                    print(
-                        "Usage: vc <word1> [word2 ...] [topn] [pca|tsne]"
-                    )
+                    print("Usage: vc <word1> [word2 ...] [topn] [pca|tsne]")
                     continue
 
-                words = []
-                topn = settings.DEFAULT_TOPN_VC
-                method = settings.DEFAULT_VIZ_METHOD
-
+                # Prepare args for word parsing (exclude 'vc')
                 args = parts[1:]
 
-                # Check last argument for method
-                if args[-1].lower() in ("pca", "tsne"):
-                    method = args[-1].lower()
-                    args = args[:-1]
+                # Parse visualization method from the end (pca|tsne)
+                method, args = _parse_method(args, settings.DEFAULT_VIZ_METHOD)
 
-                # Check new last argument for topn integer
+                # Check if last argument is a number (potential topn)
+                # If valid, use it as topn and remove from args
+                # If invalid, treat it as a seed word and use default topn
                 if args and args[-1].isdigit():
-                    topn = int(args[-1])
-                    if topn < 1:
-                        print("topn must be at least 1.")
-                        continue
-                    if topn > settings.MAX_NEIGHBORS_PER_WORD_VC:
-                        print(
-                            "Warning: topn capped at "
-                            f"{settings.MAX_NEIGHBORS_PER_WORD_VC} "
-                            f"(requested {topn})."
-                        )
-                        topn = settings.MAX_NEIGHBORS_PER_WORD_VC
-                    args = args[:-1]
+                    potential_topn_str = args[-1]
+                    validated_topn = _parse_topn(
+                        [potential_topn_str],
+                        settings.DEFAULT_TOPN_VC,
+                        settings.MAX_NEIGHBORS_PER_WORD_VC,
+                        "vc"
+                    )
+                    if validated_topn is not None:
+                        # Valid topn found — exclude it from words list
+                        topn = validated_topn
+                        words = args[:-1]
+                    else:
+                        # Invalid topn (e.g., out of range) — treat as word
+                        topn = settings.DEFAULT_TOPN_VC
+                        words = args
+                else:
+                    # No numeric argument at the end — use default topn
+                    topn = settings.DEFAULT_TOPN_VC
+                    words = args
 
-                # Remaining arguments are seed words
-                words = args
-
+                # Validate that at least one seed word is provided
                 if not words:
                     print("Error: at least one seed word required.")
                     continue
 
+                # Execute visualization if model is loaded
                 if current_model is None:
                     print("No model loaded. Use 'use <model>' first.")
                 else:
-                    # Ensure visualization directory exists
-                    Path(settings.VIZ_DIR).mkdir(parents=True, exist_ok=True)
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    # Sanitize model name for filesystem
-                    safe_model_name = re.sub(
-                        r"[^\w\-]", "_", model_name
-                    ).strip("_")
-                    safe_model_name = re.sub(r"_+", "_", safe_model_name)
-                    # Create safe filename from seed words (limit length)
-                    seed_str = "_".join(words)[:40]
-                    filename = (
-                        f"clust_{safe_model_name}_{method}_"
-                        f"{seed_str}_top{topn}_{timestamp}.png"
+                    # Generate save path for visualization
+                    save_path = _generate_viz_save_path(
+                        words, model_name, method, topn, "clust"
                     )
-                    save_path = Path(settings.VIZ_DIR) / filename
 
                     print(
                         "Generating cluster visualization "
@@ -314,6 +277,99 @@ def interactive_shell(
             print(f"Model error: {e}")
         except Exception as e:
             print(f"Unexpected error ({type(e).__name__}): {e}")
+
+
+def _parse_topn(
+    args: list,
+    default: int,
+    max_limit: int,
+    cmd_name: str
+) -> Optional[int]:
+    """
+    Parses and validates the 'topn' parameter from command arguments.
+
+    Args:
+        args: List of command arguments.
+        default: Default value if topn is not provided.
+        max_limit: Maximum allowed value.
+        cmd_name: Name of the command for error messages.
+
+    Returns:
+        Parsed and validated topn value, or None if invalid.
+    """
+    topn_str = args[-1] if args and args[-1].isdigit() else None
+    if topn_str:
+        try:
+            topn = int(topn_str)
+            if topn < 1:
+                print(f"{cmd_name}: topn must be at least 1.")
+                return None
+            if topn > max_limit:
+                print(
+                    f"{cmd_name}: Warning: topn capped at "
+                    f"{max_limit} (requested {topn})."
+                )
+                return max_limit
+            return topn
+        except ValueError:
+            print(f"{cmd_name}: Invalid number: '{topn_str}'.")
+            return None
+    return default
+
+
+def _parse_method(args: list, default_method: str) -> tuple[str, list]:
+    """
+    Parses the visualization method ('pca' or 'tsne') from arguments.
+
+    Args:
+        args: List of command arguments (potentially modified).
+        default_method: Default method if none found.
+
+    Returns:
+        Tuple of (parsed_method, remaining_args).
+    """
+    method = default_method
+    if args and args[-1].lower() in ("pca", "tsne"):
+        method = args[-1].lower()
+        # Remove the method from args
+        args = args[:-1]
+    return method, args
+
+
+def _generate_viz_save_path(
+    base_name_parts: list,
+    model_name: str,
+    method: str,
+    topn: int,
+    viz_type: str  # e.g., "analogy", "clust"
+) -> Path:
+    """
+    Generates a standardized path for saving visualization plots.
+
+    Args:
+        base_name_parts: List of words or components forming the base name.
+        model_name: Name of the active model.
+        method: Visualization method ('pca', 'tsne').
+        topn: Number of neighbors.
+        viz_type: Type of visualization ("analogy", "clust").
+
+    Returns:
+        Path object for the save location.
+    """
+    Path(settings.VIZ_DIR).mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # Sanitize model name for filename
+    safe_model_name = re.sub(r"[^\w\-]", "_", model_name).strip("_")
+    safe_model_name = re.sub(r"_+", "_", safe_model_name)
+
+    # Create safe filename from base name parts (limit length)
+    base_str = "_".join(base_name_parts)[:40]
+    filename = (
+        f"{viz_type}_{safe_model_name}_{method}_"
+        f"{base_str}_top{topn}_{timestamp}.png"
+    )
+    return Path(settings.VIZ_DIR) / filename
 
 
 def _show_help() -> None:

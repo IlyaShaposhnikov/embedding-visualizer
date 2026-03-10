@@ -3,6 +3,7 @@ Pure business logic for model evaluation on the Google Analogy Test Set.
 Does not perform any formatting or printing.
 """
 
+import logging
 import os
 from typing import Dict, List, Tuple, Optional
 
@@ -10,6 +11,8 @@ from gensim.models import KeyedVectors
 
 from src.core.config import settings
 from src.data.data_extraction import get_analogy_solution
+
+logger = logging.getLogger(__name__)
 
 
 def parse_questions_file(
@@ -66,7 +69,7 @@ def parse_questions_file(
         raise ValueError(f"No valid questions found in {file_path}")
 
     total_questions = sum(len(q) for q in sections.values())
-    print(
+    logger.info(
         f"Parsed {len(sections)} sections with {total_questions:,} questions"
     )
     return sections
